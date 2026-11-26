@@ -214,5 +214,5 @@ const rows: Row[] = [
 ];
 
 export const CITIES: City[] = rows.map(([name, country, lat, lon, tz, pop]) => ({ name, country, lat, lon, tz, pop }));
-export const HOME_DEFAULT: City = { name: 'Bésayes', country: 'France', lat: 45.07, lon: 5.2, tz: 'Europe/Paris', pop: 0.001 };
+export const HOME_DEFAULT: City = { name: 'Beaucaire', country: 'France', lat: 43.81, lon: 4.64, tz: 'Europe/Paris', pop: 0.001 };
 export const POLE: City = { name: 'Pôle Nord', country: 'Arctique', lat: 90, lon: 0, tz: 'UTC', pop: 0 };
