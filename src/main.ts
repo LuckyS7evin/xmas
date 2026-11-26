@@ -463,7 +463,7 @@ function sendLetter() {
 
 /* ---------- réglages ---------- */
 function settingsView() {
-  const opts = [HOME_DEFAULT, ...[...CITIES].filter((c) => c.pop > 0).sort((a, b) => a.name.localeCompare(b.name, 'fr'))]
+  const opts = [...CITIES].filter((c) => c.pop > 0).sort((a, b) => a.name.localeCompare(b.name, 'fr'))
     .map((c) => `<option value="${esc(c.name)}"${c.name === settings.city ? ' selected' : ''}>${esc(c.name)} · ${esc(c.country)}</option>`).join('');
   return `<main class="screen">${bar('Réglages')}
   <form class="card up d2" id="sf">

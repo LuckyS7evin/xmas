@@ -21,5 +21,6 @@
   },
   "private": true,
   "type": "module",
-  "description": "Suivre le Père Noël le 24 décembre : PWA statique, hors ligne."
+  "description": "Suivre le Père Noël le 24 décembre : PWA statique, hors ligne.",
+  "license": "MIT"
 }

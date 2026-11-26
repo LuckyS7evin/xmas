@@ -6,7 +6,7 @@ Une petite application web pour suivre le Père Noël pendant sa tournée du 24 
 
 ## Fonctionnalités
 
-- **Suivi en direct.** Le Père Noël suit minuit local d'est en ouest, de Kiritimati (UTC+14) à l'île Baker (UTC−12), en passant par environ 200 villes. Il survole la ville choisie à **minuit pile**.
+- **Suivi en direct.** Le Père Noël suit minuit local d'est en ouest, de Kiritimati (UTC+14) à l'île Baker (UTC−12), en passant par environ 200 villes. Il survole la ville choisie dans les réglages (Paris par défaut) à **minuit pile**.
 - **Écran principal.** Ville survolée, globe animé, compteur de cadeaux qui défile, avancement du voyage et heure d'arrivée chez vous. Avant le 24 : compte à rebours au Pôle Nord.
 - **Cadeaux pour notre ville**, distribués dans le quart d'heure avant minuit.
 - **Carte.** Globe à faire tourner au doigt, zoom par pincement, villes cliquables avec leur heure de passage.
@@ -54,7 +54,9 @@ traineau.example.lan {
 
 L'installation en PWA exige **HTTPS** (ou `localhost`).
 
-## Crédits
+## Licence et crédits
+
+- Code sous licence [MIT](LICENSE).
 
 - Polices [Fraunces](https://github.com/undercasetype/Fraunces) et [Nunito Sans](https://github.com/Fonthausen/NunitoSans), sous licence SIL Open Font License 1.1 (voir `src/fonts/OFL-*.txt`).
 - Contours des continents : [Natural Earth](https://www.naturalearthdata.com/), domaine public.
