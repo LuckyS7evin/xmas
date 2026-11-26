@@ -1,19 +1,28 @@
 # Traîneau 🛷
 
-Petite PWA familiale pour suivre le Père Noël le 24 décembre. 100 % statique, aucune API, aucun backend.
+Une petite application web pour suivre le Père Noël pendant sa tournée du 24 décembre, pensée pour les enfants et le téléphone familial. Elle s'installe sur Android (PWA), fonctionne hors ligne et reste 100 % statique : pas de backend, pas d'API, pas de traceur.
 
-- Le Père Noël suit **minuit local** (il survole votre ville à minuit pile) d'est en ouest (Kiritimati UTC+14 → île Baker UTC−12), à travers environ 200 villes.
-- Avant le départ : compte à rebours au Pôle Nord. Après son passage : « Il est passé ! ».
-- Réglages (prénoms, ville ; par défaut **Beaucaire**, thème), lettre au Père Noël imprimable, carte du trajet.
-- Grelots (🔔 en haut à gauche, coupés par défaut) : à chaque ville, « Vive le vent » à minuit chez nous ; toucher le traîneau fait sonner les grelots.
-- Fiches des 9 rennes (touche « rennes en forme ») avec leur énergie qui baisse pendant la nuit.
-- Compteur « cadeaux pour notre ville » (≈ 27 % de la population), distribués dans le quart d'heure avant minuit.
-- Veilleuse (🌙) : écran plein, très sombre, lune et traîneau qui passe lentement ; l'écran reste allumé. × pour quitter.
-- Thème nuit automatique de 18 h à 7 h (heure de la ville choisie), ou forcé dans les réglages.
-- **Démo** : `?demo=1` (ou le ❄ discret en bas des réglages) rejoue la tournée en ~3 min.
-  Pour tester un instant précis : `?at=2026-12-24T21:00Z`.
+**Démo :** https://luckys7evin.github.io/xmas/ — ajoutez `?demo=1` pour rejouer toute la tournée en 3 minutes.
+
+## Fonctionnalités
+
+- **Suivi en direct.** Le Père Noël suit minuit local d'est en ouest, de Kiritimati (UTC+14) à l'île Baker (UTC−12), en passant par environ 200 villes. Il survole la ville choisie à **minuit pile**.
+- **Écran principal.** Ville survolée, globe animé, compteur de cadeaux qui défile, avancement du voyage et heure d'arrivée chez vous. Avant le 24 : compte à rebours au Pôle Nord.
+- **Cadeaux pour notre ville**, distribués dans le quart d'heure avant minuit.
+- **Carte.** Globe à faire tourner au doigt, zoom par pincement, villes cliquables avec leur heure de passage.
+- **Les 9 rennes.** Une fiche par renne, avec son énergie qui baisse au fil de la nuit.
+- **Lettre au Père Noël.** Gardée sur le téléphone, imprimable, et « envoyée au Pôle Nord » avec une enveloppe animée.
+- **Un mot du Père Noël** pour chaque enfant, dévoilé le 25 au réveil.
+- **Grelots** synthétisés en Web Audio, et « Vive le vent » à minuit (coupés par défaut).
+- **Veilleuse** plein écran pour la chambre, qui garde l'écran allumé.
+- **Thème nuit** automatique de 18 h à 7 h.
+- **Accessibilité.** Les animations sont réduites si le téléphone le demande (`prefers-reduced-motion`).
+
+Les réglages (prénoms, ville, thème) et la lettre restent dans le `localStorage` du navigateur : rien ne quitte le téléphone.
 
 ## Développement
+
+Vite + TypeScript, sans framework ni dépendance à l'exécution.
 
 ```sh
 npm install
@@ -23,23 +32,16 @@ npm run preview  # sert dist/ (le service worker n'est actif qu'en build)
 npm run icons    # régénère public/icons/*.png (nécessite Playwright)
 ```
 
-## Déploiement sur GitHub Pages
+Paramètres de test : `?demo=1` (temps accéléré) et `?at=2026-12-24T21:00Z` (instant précis).
 
-Le workflow `.github/workflows/pages.yml` construit et publie l'app à chaque push.
-Une seule fois : *Settings → Pages → Source : GitHub Actions*. L'app est alors sur
-`https://luckys7evin.github.io/xmas/`. Sur le téléphone : Chrome → ⋮ → « Installer l'application ».
+## Déploiement
 
-## Déploiement sur un LXC Debian (Caddy)
+**GitHub Pages.** Le workflow `.github/workflows/pages.yml` publie l'app à chaque push sur `main`. À activer une seule fois dans *Settings → Pages → Source : GitHub Actions*.
 
-```sh
-apt install caddy
-# depuis le PC : npm run build && rsync -a --delete dist/ root@traineau-lxc:/srv/traineau/
-```
-
-`/etc/caddy/Caddyfile` :
+**Serveur statique (Caddy, nginx…).** Copiez `dist/` sur le serveur. Les chemins sont relatifs, l'app fonctionne aussi dans un sous-dossier. Exemple avec Caddy :
 
 ```caddy
-traineau.maison.lan {   # ou :80
+traineau.example.lan {
 	root * /srv/traineau
 	encode zstd gzip
 	file_server
@@ -50,4 +52,9 @@ traineau.maison.lan {   # ou :80
 }
 ```
 
-`systemctl reload caddy`. L'installation en PWA sur Android exige **HTTPS** (ou `localhost`) : utilise un certificat interne Caddy (`tls internal`), ton reverse proxy existant, ou GitHub Pages (les chemins sont relatifs, `dist/` fonctionne dans un sous-dossier).
+L'installation en PWA exige **HTTPS** (ou `localhost`).
+
+## Crédits
+
+- Polices [Fraunces](https://github.com/undercasetype/Fraunces) et [Nunito Sans](https://github.com/Fonthausen/NunitoSans), sous licence SIL Open Font License 1.1 (voir `src/fonts/OFL-*.txt`).
+- Contours des continents : [Natural Earth](https://www.naturalearthdata.com/), domaine public.
