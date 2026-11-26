@@ -6,5 +6,4 @@
 - 🌙 Mode « veilleuse » plein écran pour la chambre.
 - 🎅 Vrai « Ho ho ho ! » enregistré (fichier audio) au passage chez nous.
 - 🧑‍🎄 Plusieurs lettres (une par enfant) et historique d'année en année.
-- 🗺️ Carte : zoom pincé, rotation verticale, villes cliquables avec heure de passage.
 - 🎁 Compteur « cadeaux pour notre ville » et message personnalisé par prénom.
