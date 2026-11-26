@@ -125,6 +125,7 @@ const rows: Row[] = [
   ['Luxembourg', 'Luxembourg', 49.61, 6.13, 'Europe/Luxembourg', 0.13],
   ['Grenoble', 'France', 45.19, 5.72, 'Europe/Paris', 0.7],
   ['Marseille', 'France', 43.3, 5.37, 'Europe/Paris', 1.9],
+  ['Beaucaire', 'France', 43.81, 4.64, 'Europe/Paris', 0.016],
   ['Valence', 'France', 44.93, 4.89, 'Europe/Paris', 0.13],
   ['Amsterdam', 'Pays-Bas', 52.37, 4.9, 'Europe/Amsterdam', 2.5],
   ['Lyon', 'France', 45.76, 4.84, 'Europe/Paris', 2.3],
@@ -214,5 +215,5 @@ const rows: Row[] = [
 ];
 
 export const CITIES: City[] = rows.map(([name, country, lat, lon, tz, pop]) => ({ name, country, lat, lon, tz, pop }));
-export const HOME_DEFAULT: City = { name: 'Beaucaire', country: 'France', lat: 43.81, lon: 4.64, tz: 'Europe/Paris', pop: 0.016 };
+export const HOME_DEFAULT: City = CITIES.find((c) => c.name === 'Paris')!;
 export const POLE: City = { name: 'Pôle Nord', country: 'Arctique', lat: 90, lon: 0, tz: 'UTC', pop: 0 };
