@@ -150,11 +150,13 @@ function tickHome() {
 
 /* ---------- carte (globe orthographique) ---------- */
 const RAD = Math.PI / 180, GR = 150;
-let drag = 0;
+/** Vue de la carte : suit le traîneau tant qu'on n'a pas touché au globe. */
+const view = { lat: 0, lon: 0, k: 1, follow: true };
+let gr = GR, picked = -1; // rayon courant (zoom), étape sélectionnée
 type P = [number, number, number]; // x, y, profondeur (>0 = face visible)
 function proj(lat: number, lon: number, c: { lat: number; lon: number }): P {
   const l = (lon - c.lon) * RAD, p = lat * RAD, p0 = c.lat * RAD;
-  return [GR * Math.cos(p) * Math.sin(l), -GR * (Math.cos(p0) * Math.sin(p) - Math.sin(p0) * Math.cos(p) * Math.cos(l)),
+  return [gr * Math.cos(p) * Math.sin(l), -gr * (Math.cos(p0) * Math.sin(p) - Math.sin(p0) * Math.cos(p) * Math.cos(l)),
     Math.sin(p0) * Math.sin(p) + Math.cos(p0) * Math.cos(p) * Math.cos(l)];
 }
 const project = (lat: number, lon: number, c: { lat: number; lon: number }): [number, number, boolean] => {
@@ -177,16 +179,18 @@ function ringPath(pts: P[]): string {
       else {
         let d = ang - exit;
         d -= Math.round(d / (2 * Math.PI)) * 2 * Math.PI;
-        for (let k = 1; k < 12; k++) out.push([GR * Math.cos(exit + (d * k) / 12), GR * Math.sin(exit + (d * k) / 12)]);
+        for (let k = 1; k < 12; k++) out.push([gr * Math.cos(exit + (d * k) / 12), gr * Math.sin(exit + (d * k) / 12)]);
       }
-      out.push([GR * Math.cos(ang), GR * Math.sin(ang)]);
+      out.push([gr * Math.cos(ang), gr * Math.sin(ang)]);
     }
   }
   return 'M' + out.map(([x, y]) => f1(x) + ' ' + f1(y)).join('L') + 'Z';
 }
 const f1 = (n: number) => n.toFixed(1);
 function globeSvg(s: State) {
-  const c = { lat: Math.max(-30, Math.min(50, s.pos.lat)) * 0.8, lon: s.pos.lon + drag };
+  if (view.follow) Object.assign(view, { lat: Math.max(-30, Math.min(50, s.pos.lat)) * 0.8, lon: s.pos.lon });
+  const c = view;
+  gr = GR * view.k;
   let land = '';
   for (const r of LAND) {
     const pts: P[] = [];
@@ -209,29 +213,46 @@ function globeSvg(s: State) {
   st.forEach((x, i) => {
     if (x.name === 'Pôle Nord') return;
     const [px, py, v] = project(x.lat, x.lon, c);
-    if (v) dots += i <= s.i ? `<circle cx="${f1(px)}" cy="${f1(py)}" r="2.6" fill="#EBA93A"/>` : `<circle cx="${f1(px)}" cy="${f1(py)}" r="1.6" fill="#FFF4E6" opacity=".7"/>`;
+    if (v) dots += i <= s.i ? `<circle cx="${f1(px)}" cy="${f1(py)}" r="2.6" fill="#EBA93A"/>` : `<circle cx="${f1(px)}" cy="${f1(py)}" r="2" fill="#FFF4E6" stroke="#3A2630" stroke-width=".8"/>`;
   });
   const h = home(), [hx, hy, hv] = project(h.lat, h.lon, c);
   const [sx, sy, sv] = project(s.pos.lat, s.pos.lon, c);
-  return `<circle class="halo" r="${GR + 12}"/><circle r="${GR}" fill="#2F3F7A"/>
+  const pk = trip.stops[picked], [kx, ky, kv] = pk ? project(pk.lat, pk.lon, c) : [0, 0, false];
+  return `<defs><clipPath id="gc"><circle r="${gr}"/></clipPath></defs><circle class="halo" r="${gr + 12}"/><circle r="${gr}" fill="#2F3F7A"/>
   <g clip-path="url(#gc)"><g fill="#FFF4E6" stroke="#3A2630" stroke-width=".6" stroke-linejoin="round">${land}</g>
   <path d="${future}" stroke="#FFF4E6" stroke-width="1.2" stroke-dasharray="2 4" fill="none" opacity=".55"/>
   <path d="${past}" stroke="#EBA93A" stroke-width="2.4" fill="none" stroke-linecap="round"/>${dots}
   ${hv ? `<g transform="translate(${f1(hx)} ${f1(hy)})"><path d="M-6 0L0-6 6 0V6H-6Z" fill="#C4492A" stroke="#3A2630" stroke-width="1.4" stroke-linejoin="round"/></g>` : ''}
+  ${kv ? `<circle cx="${f1(kx)}" cy="${f1(ky)}" r="7" fill="none" stroke="#F2825C" stroke-width="2.5"/>` : ''}
   ${sv ? `<circle class="tw" cx="${f1(sx)}" cy="${f1(sy)}" r="11" fill="#EBA93A" opacity=".45"/><use href="#sleigh" x="${f1(sx - 30)}" y="${f1(sy - 18)}" width="60" height="24"/>` : ''}</g>
-  <circle r="${GR}" fill="none" stroke="#3A2630" stroke-width="2"/>`;
+  <circle r="${gr}" fill="none" stroke="#3A2630" stroke-width="2"/>`;
 }
 
 function mapView() {
   return `<main class="screen">${bar('Le grand <em>voyage</em>')}
-  <section class="card globe up d2"><svg id="map" viewBox="-165 -165 330 330" role="img" aria-label="Globe avec le trajet du Père Noël"><defs><clipPath id="gc"><circle r="${GR}"/></clipPath></defs><g id="mapg"></g></svg></section>
+  <section class="card globe up d2"><svg id="map" viewBox="-165 -165 330 330" role="img" aria-label="Globe avec le trajet du Père Noël"><g id="mapg"></g></svg>
+    <div class="map-ui"><button class="round sm" id="zin" type="button" aria-label="Zoomer">+</button><button class="round sm" id="zout" type="button" aria-label="Dézoomer">−</button><button class="pill" id="follow" type="button" hidden>Suivre le traîneau</button></div>
+    <p class="hint map-hint">Fais tourner le globe avec le doigt, pince pour zoomer, touche une ville.</p>
+    <div id="mcity"></div></section>
   <div class="legend up d2" style="margin-top:14px"><span><i style="background:#EBA93A"></i>visitée</span><span><i style="background:#FFF4E6"></i>à venir</span><span><i style="background:#C4492A;border-radius:2px"></i>chez nous</span></div>
   <section class="card grid up d4" id="mstats"></section>
   <section class="card up d6" style="margin-bottom:28px"><div class="big">Dernières <em>étapes</em></div><ul class="stops" id="mstops"></ul></section></main>`;
 }
-function tickMap() {
-  const s = state(trip, now(), home()), tz = home().tz;
+function renderGlobe() {
+  const s = state(trip, now(), home()), st = trip.stops[picked];
   document.getElementById('mapg')!.innerHTML = globeSvg(s);
+  document.getElementById('follow')!.hidden = view.follow;
+  const box = document.getElementById('mcity')!;
+  if (!st) { box.innerHTML = ''; return s; }
+  const h = home(), done = picked <= s.i;
+  box.innerHTML = `<div class="city-pop"><button class="x" id="unpick" type="button" aria-label="Fermer">×</button>
+    <div class="big">${esc(st.name)} <small>${esc(st.country)}</small></div>
+    <p>${done ? 'Le Père Noël est passé' : 'Le Père Noël passera'} à <b>${hm(st.t, st.tz)}</b>, heure locale${hm(st.t, st.tz) !== hm(st.t, h.tz) ? ` — <b>${hm(st.t, h.tz)}</b> chez nous` : ''}.</p>
+    <p class="muted">${done ? '✓ Cadeaux déposés' : `⏳ Encore ${countdown(Math.max(0, st.t - now())).replace(/ \d+ s$/, '')}`}</p></div>`;
+  return s;
+}
+function tickMap() {
+  const s = renderGlobe(), tz = home().tz;
   const visited = trip.stops.slice(1, s.i + 1).filter((x) => x.name !== 'Pôle Nord');
   document.getElementById('mstats')!.innerHTML =
     `<div><b>${nf.format(Math.round(s.km))}</b><span>km parcourus</span></div><div><b>${visited.length}/${trip.stops.length - 2}</b><span>villes visitées</span></div>` +
@@ -241,12 +262,58 @@ function tickMap() {
     ? last.map((x) => `<li><span>${esc(x.name)} <small>· ${esc(x.country)}</small></span><small>${hm(x.t, tz)}</small></li>`).join('')
     : `<li><span>Le traîneau attend au Pôle Nord.</span></li>`;
 }
-function bindDrag() {
-  const svg = document.getElementById('map')!;
-  let x0: number | null = null;
-  svg.addEventListener('pointerdown', (e) => { x0 = e.clientX; svg.setPointerCapture(e.pointerId); });
-  svg.addEventListener('pointermove', (e) => { if (x0 === null) return; drag -= (e.clientX - x0) * 0.5; x0 = e.clientX; tickMap(); });
-  svg.addEventListener('pointerup', () => (x0 = null));
+function bindMap() {
+  const svg = document.getElementById('map') as unknown as SVGSVGElement;
+  const pts = new Map<number, { x: number; y: number }>();
+  let moved = 0, pinch = 0, frame = 0;
+  const redraw = () => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; renderGlobe(); }); };
+  const zoom = (f: number) => { view.k = Math.min(6, Math.max(1, view.k * f)); redraw(); };
+  const toSvg = (e: PointerEvent) => { const r = svg.getBoundingClientRect(), u = 330 / r.width; return [(e.clientX - r.left) * u - 165, (e.clientY - r.top) * u - 165]; };
+  const spread = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+  svg.addEventListener('pointerdown', (e) => {
+    svg.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    moved = 0;
+    if (pts.size === 2) pinch = spread();
+  });
+  svg.addEventListener('pointermove', (e) => {
+    const p = pts.get(e.pointerId);
+    if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    moved += Math.abs(dx) + Math.abs(dy);
+    if (pts.size === 2) { const d = spread(); if (pinch) zoom(d / pinch); pinch = d; return; }
+    if (moved < 4) return;
+    const u = (330 / svg.getBoundingClientRect().width) / (gr * RAD); // degrés par pixel écran
+    view.follow = false;
+    view.lon -= dx * u;
+    view.lat = Math.max(-80, Math.min(80, view.lat + dy * u));
+    redraw();
+  });
+  const up = (e: PointerEvent) => {
+    if (pts.size === 1 && moved < 6) {
+      // tap : étape visible la plus proche (≤ 16 unités)
+      const [x, y] = toSvg(e);
+      let best = -1, bd = 16;
+      trip.stops.forEach((c, i) => {
+        if (c.name === 'Pôle Nord') return;
+        const [px, py, v] = project(c.lat, c.lon, view);
+        const d = Math.hypot(px - x, py - y);
+        if (v && d < bd) { bd = d; best = i; }
+      });
+      picked = best;
+      redraw();
+    }
+    pts.delete(e.pointerId);
+    if (pts.size < 2) pinch = 0;
+  };
+  svg.addEventListener('pointerup', up);
+  svg.addEventListener('pointercancel', (e) => pts.delete(e.pointerId));
+  svg.addEventListener('wheel', (e) => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15); }, { passive: false });
+  document.getElementById('zin')!.onclick = () => zoom(1.5);
+  document.getElementById('zout')!.onclick = () => zoom(1 / 1.5);
+  document.getElementById('follow')!.onclick = () => { view.follow = true; redraw(); };
+  document.getElementById('mcity')!.onclick = (e) => { if ((e.target as Element).id === 'unpick') { picked = -1; redraw(); } };
 }
 
 /* ---------- les 9 rennes ---------- */
@@ -363,7 +430,7 @@ function route() {
   clearInterval(timer); cancelAnimationFrame(raf); lastMode = ''; lastHere = ''; for (const k in shown) delete shown[k];
   const r = location.hash.replace('#/', '');
   scrollTo(0, 0);
-  if (r === 'carte') { app.innerHTML = mapView(); tickMap(); bindDrag(); timer = setInterval(tickMap, demo ? 250 : 2000); }
+  if (r === 'carte') { app.innerHTML = mapView(); Object.assign(view, { k: 1, follow: true }); picked = -1; tickMap(); bindMap(); timer = setInterval(tickMap, demo ? 250 : 2000); }
   else if (r === 'rennes') { app.innerHTML = reindeerView(); tickReindeer(); timer = setInterval(tickReindeer, demo ? 300 : 5000); }
   else if (r === 'lettre') { app.innerHTML = letterView(); bindLetter(); }
   else if (r === 'reglages') { app.innerHTML = settingsView(); bindSettings(); }
