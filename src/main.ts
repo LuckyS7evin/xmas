@@ -26,7 +26,7 @@ function now(): number {
 const load = <T>(k: string, d: T): T => { try { return { ...d, ...JSON.parse(localStorage.getItem(k) || '{}') }; } catch { return d; } };
 const save = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* mode privé */ } };
 const settings = load('traineau.settings', { names: '', city: HOME_DEFAULT.name, sound: false, theme: 'auto' });
-const letter = load('traineau.letter', { text: '', wishes: '', sig: '' });
+const letter = load('traineau.letter', { text: '', wishes: '', sig: '', sent: 0 });
 const home = (): City => CITIES.find((c) => c.name === settings.city) ?? HOME_DEFAULT;
 
 /* ---------- formats ---------- */
@@ -44,6 +44,7 @@ function countdown(ms: number) {
   const s = Math.floor(ms / 1000), d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
   return d > 0 ? `${d} j ${h} h ${pad(m)}` : `${h} h ${pad(m)} min ${pad(s % 60)} s`;
 }
+const kidNames = () => settings.names.split(/\s*(?:&|,|\bet\b)\s*/).map((x) => x.trim()).filter(Boolean);
 const houseOf = () => (settings.names.trim() ? `La maison de ${esc(settings.names.trim())}` : `La maison à ${esc(home().name)}`);
 
 /* ---------- icônes ---------- */
@@ -54,6 +55,7 @@ const ICON = {
   gear: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>',
   bell: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4M12 3v2"/><path class="mute" d="M3 3l18 18"/></svg>',
   moon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>',
+  send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-8-6 18-3-8z"/><path d="M12 13l9-10"/></svg>',
   print: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M7 14h10v7H7z"/></svg>',
 };
 const sleighSvg = (w = 110, h = 44) =>
@@ -99,6 +101,7 @@ function homeView() {
     <div><div class="muted">${houseOf()}</div><div class="big" id="arrive"></div><div class="hush" id="hush"></div></div>
   </section>
   <div class="city-gifts up d4" id="cg"></div>
+  <section class="card note" id="note" hidden></section>
   <nav class="actions up d6">
     <a class="btn" href="#/lettre"><span class="wig">${ICON.pen}</span>Écrire au Père Noël</a>
     <a class="round" href="#/carte" aria-label="Voir la carte">${ICON.map}</a>
@@ -123,6 +126,9 @@ function tickHome() {
     $('house').classList.toggle('passe', s.mode === 'passe' || s.mode === 'rentre');
   }
   const set = (id: string, html: string) => { if (shown[id] !== html) $(id).innerHTML = shown[id] = html; };
+  const morning = s.mode !== 'pole' && now() >= s.homeMidnight + MORNING;
+  $('note').hidden = !morning;
+  if (morning) set('note', santaNote());
   const cg = cityGifts(now());
   set('cg', `🎁 <b>${nf.format(cg.done || cg.total)}</b> ${cg.done === cg.total ? 'cadeaux déposés' : cg.done ? `/ ${nf.format(cg.total)} cadeaux déposés` : 'cadeaux à livrer'} ${de(home().name).replace(/^de /, 'à ').replace(/^d'/, 'à ').replace(/^du /, 'au ')}${cg.kids ? ` · dont <b>${cg.kids}</b> ${cg.kids > 1 ? 'pour nos lutins' : 'pour notre lutin'}` : ''}`);
   if (s.mode === 'pole') {
@@ -148,7 +154,7 @@ function tickHome() {
       set('arrive', 'Il arrive à <em>minuit pile</em>');
       set('hush', s.homeArrival - now() < 3_600_000 ? 'Vite, au lit ! Il approche…' : 'Chut… il faut dormir !');
     } else {
-      set('arrive', 'Il est <em>passé !</em>'); set('hush', 'Les cadeaux sont sous le sapin…');
+      set('arrive', 'Il est <em>passé !</em>'); set('hush', now() < s.homeMidnight + MORNING ? 'Un petit mot t’attendra au réveil…' : 'Les cadeaux sont sous le sapin…');
     }
   }
 }
@@ -321,13 +327,40 @@ function bindMap() {
   document.getElementById('mcity')!.onclick = (e) => { if ((e.target as Element).id === 'unpick') { picked = -1; redraw(); } };
 }
 
+/* ---------- mot du Père Noël (au réveil, le 25) ---------- */
+const MORNING = 7 * 3_600_000; // dévoilé à 7 h
+const NOTE_A = [
+  'merci pour les biscuits, ils étaient délicieux ! Rodolphe a adoré sa carotte.',
+  'j’ai vu que tu avais été très sage cette année. Bravo, continue comme ça !',
+  'ta maison était l’une des plus jolies de toute ma tournée.',
+  'Tornade et Comète t’envoient un gros câlin de renne !',
+  'j’ai fait très attention à ne pas te réveiller, tu dormais si bien.',
+];
+const NOTE_B = [
+  'Prends bien soin de tes cadeaux et partage-les avec le sourire.',
+  'Les lutins te disent bonjour depuis le Pôle Nord.',
+  'Je repasserai l’année prochaine, promis !',
+  'N’oublie pas de faire un gros câlin à ta famille aujourd’hui.',
+];
+const hash = (x: string) => [...x].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+function santaNote() {
+  const names = kidNames(), y = trip.year;
+  const signer = Math.max(0, names.findIndex((n) => n.toLowerCase() === letter.sig.trim().toLowerCase()));
+  const lines = (names.length ? names : ['Les enfants']).map((n, i) => {
+    const k = hash(n + y);
+    const a = letter.sent && i === signer ? 'j’ai bien reçu ta lettre au Pôle Nord, merci de tout cœur !' : NOTE_A[k % NOTE_A.length];
+    return `<p><b>${esc(n)}</b>, ${a} ${NOTE_B[(k >>> 3) % NOTE_B.length]}</p>`;
+  }).join('');
+  return `<div class="note-head"><span>✉</span>Un mot du <em>Père Noël</em></div>${lines}<div class="note-sig">— Père Noël</div>`;
+}
+
 /* ---------- compteur de notre ville ---------- */
 const WORLD = 8_100_000_000;
 /** Cadeaux pour la ville choisie : distribués pendant le quart d'heure avant minuit. */
 function cityGifts(t: number) {
   const h = home(), total = Math.max(1, Math.round((h.pop * 1e6 * KIDS) / WORLD));
   const m = state(trip, t, h).homeMidnight, f = Math.min(1, Math.max(0, (t - (m - 15 * 60_000)) / (15 * 60_000)));
-  const kids = settings.names.split(/\s*(?:&|,|\bet\b)\s*/).filter((x) => x.trim()).length;
+  const kids = kidNames().length;
   return { total, done: Math.floor(total * f), kids };
 }
 
@@ -386,7 +419,8 @@ function letterView() {
     <label class="field"><span>Signé</span><input name="sig" value="${esc(letter.sig)}" placeholder="${esc(settings.names) || 'Ton prénom'}"></label>
     <p class="hint">Ta lettre est gardée sur ce téléphone.</p>
   </form>
-  <nav class="actions up d4"><button class="btn" id="print" type="button">${ICON.print}Imprimer ma lettre</button></nav>
+  <p class="hint sent-hint" id="sent">${letter.sent ? '✓ Ta lettre est bien arrivée au Pôle Nord.' : ''}</p>
+  <nav class="actions up d4"><button class="btn" id="send" type="button">${ICON.send}Envoyer au Pôle Nord</button><button class="round" id="print" type="button" aria-label="Imprimer ma lettre">${ICON.print}</button></nav>
   <article class="printout" id="po"></article></main>`;
 }
 function renderPrintout() {
@@ -404,7 +438,27 @@ function bindLetter() {
     renderPrintout();
   });
   document.getElementById('print')!.onclick = () => window.print();
+  document.getElementById('send')!.onclick = sendLetter;
   renderPrintout();
+}
+
+function sendLetter() {
+  letter.sent = Date.now();
+  save('traineau.letter', letter);
+  if (settings.sound) { unlock(); jingle(8); }
+  const o = document.createElement('div');
+  o.className = 'fly-letter';
+  o.innerHTML = `<div class="env">
+    <svg class="paper" viewBox="0 0 120 90" aria-hidden="true"><rect x="8" y="4" width="104" height="82" rx="4" fill="#FFF7EE" stroke="#3A2630" stroke-width="2.5"/><path d="M22 24h76M22 38h76M22 52h56" stroke="#E8C3A8" stroke-width="4" stroke-linecap="round"/></svg>
+    <svg class="body" viewBox="0 0 160 110" aria-hidden="true"><rect x="3" y="3" width="154" height="104" rx="8" fill="#EBA93A" stroke="#3A2630" stroke-width="3"/><path d="M3 107l62-48h30l62 48" fill="none" stroke="#3A2630" stroke-width="3" stroke-linejoin="round"/><circle cx="80" cy="66" r="11" fill="#C4492A" stroke="#3A2630" stroke-width="2.5" class="seal"/></svg>
+    <svg class="flap" viewBox="0 0 160 70" aria-hidden="true"><path d="M3 3h154L80 66z" fill="#F2BE5C" stroke="#3A2630" stroke-width="3" stroke-linejoin="round"/></svg>
+  </div>
+  <div class="spark" aria-hidden="true">${'<i></i>'.repeat(10)}</div>
+  <p class="fly-msg" role="status">Ta lettre s’envole vers le <em>Pôle Nord</em> !<small>Touche l’écran pour revenir</small></p>`;
+  document.body.append(o);
+  const close = () => { o.remove(); const h = document.getElementById('sent'); if (h) h.textContent = '✓ Ta lettre est bien arrivée au Pôle Nord.'; };
+  o.onclick = close;
+  setTimeout(close, 6500);
 }
 
 /* ---------- réglages ---------- */
