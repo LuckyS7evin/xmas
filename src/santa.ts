@@ -2,7 +2,6 @@ import { CITIES, POLE, type City } from './cities';
 
 const MIN = 60_000;
 export const KIDS = 2_200_000_000; // cadeaux à distribuer
-const MARGIN = 20 * MIN; // il passe un peu avant minuit
 
 /** Instant UTC où il est minuit (24→25 déc.) dans le fuseau donné. */
 export function midnight(tz: string, year: number): number {
@@ -19,12 +18,13 @@ function offset(tz: string, t: number): number {
 }
 
 export type Stop = City & { t: number; cum: number; km: number };
-export type Trip = { year: number; stops: Stop[]; start: number; end: number; total: number };
+export type Trip = { year: number; home: string; stops: Stop[]; start: number; end: number; total: number };
 
-export function buildTrip(year: number): Trip {
-  // groupe les villes par minuit identique, étalées d'est en ouest sur ±25 min
+/** Trajet de l'année. La maison (home) est une étape survolée à minuit pile. */
+export function buildTrip(year: number, home: City): Trip {
   const groups = new Map<number, City[]>();
-  for (const c of CITIES) {
+  const list = CITIES.some((c) => c.name === home.name) ? CITIES : [...CITIES, home];
+  for (const c of list) {
     const m = midnight(c.tz, year);
     groups.set(m, [...(groups.get(m) ?? []), c]);
   }
@@ -32,13 +32,19 @@ export function buildTrip(year: number): Trip {
   const stops: Stop[] = [];
   let last: LL = POLE;
   for (const m of [...groups.keys()].sort((a, b) => a - b)) {
-    const g = groups.get(m)!, n = g.length;
-    for (let i = 0; i < n; i++) {
+    const g = groups.get(m)!, ord: City[] = [];
+    while (g.length) {
       let k = 0;
       g.forEach((c, j) => { if (dist(last, c) < dist(last, g[k])) k = j; });
-      last = g.splice(k, 1)[0];
-      stops.push({ ...(last as City), t: m - 14 * MIN + (28 * MIN * (i + 0.5)) / n, cum: 0, km: 0 });
+      ord.push((last = g.splice(k, 1)[0]));
     }
+    const n = ord.length, h = ord.findIndex((c) => c.name === home.name);
+    ord.forEach((c, i) => {
+      const t = h < 0 ? m - 14 * MIN + (28 * MIN * (i + 0.5)) / n
+        : i < h ? m - (14 * MIN * (h - i)) / h
+        : i === h ? m : m + (14 * MIN * (i - h)) / (n - 1 - h);
+      stops.push({ ...c, t, cum: 0, km: 0 });
+    });
   }
   stops.sort((a, b) => a.t - b.t);
   const start = stops[0].t - 60 * MIN, end = stops[stops.length - 1].t + 60 * MIN;
@@ -48,7 +54,7 @@ export function buildTrip(year: number): Trip {
     stops[i].cum = stops[i - 1].cum + stops[i].pop;
     stops[i].km = stops[i - 1].km + dist(stops[i - 1], stops[i]);
   }
-  return { year, stops, start, end, total: stops[stops.length - 1].cum };
+  return { year, home: home.name, stops, start, end, total: stops[stops.length - 1].cum };
 }
 
 const R = Math.PI / 180;
@@ -91,7 +97,7 @@ export function state(trip: Trip, now: number, home: City): State {
     gifts, progress: Math.min(1, Math.max(0, (now - trip.start) / (trip.end - trip.start))),
     km: now <= trip.start ? 0 : a.km + (b.km - a.km) * f,
     cookies: Math.round(gifts / 2.6), milk: Math.round(gifts / 5.2),
-    homeMidnight, homeArrival: homeMidnight - MARGIN, countdown: Math.max(0, trip.start - now),
+    homeMidnight, homeArrival: homeMidnight, countdown: Math.max(0, trip.start - now),
   };
 }
 

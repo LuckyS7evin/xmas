@@ -8,12 +8,12 @@ const q = new URLSearchParams(location.search);
 const demo = q.has('demo');
 const t0 = Date.now();
 const shift = q.has('at') ? Date.parse(q.get('at')!) - t0 || 0 : 0; // ?at=2026-12-24T20:00Z (tests)
-let trip: Trip = buildTrip(tripYear(t0 + shift));
+let trip: Trip = buildTrip(tripYear(t0 + shift), HOME_DEFAULT);
 const SPEED = 600; // ~27 h de tournée en 2 min 40
 function now(): number {
   if (!demo) {
     const n = Date.now() + shift;
-    if (tripYear(n) !== trip.year) trip = buildTrip(tripYear(n));
+    if (tripYear(n) !== trip.year) trip = buildTrip(tripYear(n), home());
     return n;
   }
   const span = trip.end - trip.start + 70 * 60_000;
@@ -103,7 +103,6 @@ let lastMode = '';
 const shown: Record<string, string> = {};
 function tickHome() {
   const s = state(trip, now(), home()), $ = (id: string) => document.getElementById(id)!;
-  const h = home();
   if (s.mode !== lastMode) {
     lastMode = s.mode;
     $('sl').classList.toggle('rest', s.mode === 'pole' || s.mode === 'rentre');
@@ -130,7 +129,7 @@ function tickHome() {
     set('gifts', nf.format(Math.floor(s.gifts))); set('giftsL', 'cadeaux déposés');
     set('pct', Math.floor(s.progress * 100) + ' %'); set('pctL', 'du voyage');
     if (s.mode === 'vol') {
-      set('arrive', `Il arrive vers <em>${hm(s.homeArrival, h.tz)}</em>`);
+      set('arrive', 'Il arrive à <em>minuit pile</em>');
       set('hush', s.homeArrival - now() < 3_600_000 ? 'Vite, au lit ! Il approche…' : 'Chut… il faut dormir !');
     } else {
       set('arrive', 'Il est <em>passé !</em>'); set('hush', 'Les cadeaux sont sous le sapin…');
@@ -277,7 +276,7 @@ function settingsView() {
   <form class="card up d2" id="sf">
     <label class="field"><span>Prénoms des enfants</span><input name="names" value="${esc(settings.names)}" placeholder="Léa &amp; Tom" autocomplete="off"></label>
     <label class="field"><span>Notre ville</span><select name="city">${opts}</select></label>
-    <p class="hint">Le Père Noël passe chez vous un peu avant minuit, heure locale.</p>
+    <p class="hint">Le Père Noël passe chez vous à minuit pile, heure locale.</p>
   </form>
   <div class="foot"><button class="ghost${demo ? ' demo-on' : ''}" id="demo" type="button" aria-label="Mode démo">❄</button></div></main>`;
 }
@@ -304,6 +303,7 @@ function scaleStage() {
   if (st) st.style.setProperty('--s', String(st.clientWidth / 390));
 }
 function route() {
+  if (trip.home !== home().name) trip = buildTrip(trip.year, home());
   clearInterval(timer); cancelAnimationFrame(raf); lastMode = ''; for (const k in shown) delete shown[k];
   const r = location.hash.replace('#/', '');
   scrollTo(0, 0);
