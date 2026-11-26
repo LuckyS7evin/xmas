@@ -53,6 +53,7 @@ const ICON = {
   back: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
   gear: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>',
   bell: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4M12 3v2"/><path class="mute" d="M3 3l18 18"/></svg>',
+  moon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>',
   print: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M7 14h10v7H7z"/></svg>',
 };
 const sleighSvg = (w = 110, h = 44) =>
@@ -97,9 +98,11 @@ function homeView() {
     </svg>
     <div><div class="muted">${houseOf()}</div><div class="big" id="arrive"></div><div class="hush" id="hush"></div></div>
   </section>
+  <div class="city-gifts up d4" id="cg"></div>
   <nav class="actions up d6">
     <a class="btn" href="#/lettre"><span class="wig">${ICON.pen}</span>Écrire au Père Noël</a>
     <a class="round" href="#/carte" aria-label="Voir la carte">${ICON.map}</a>
+    <a class="round" href="#/veilleuse" aria-label="Veilleuse">${ICON.moon}</a>
   </nav></main>`;
 }
 
@@ -120,6 +123,8 @@ function tickHome() {
     $('house').classList.toggle('passe', s.mode === 'passe' || s.mode === 'rentre');
   }
   const set = (id: string, html: string) => { if (shown[id] !== html) $(id).innerHTML = shown[id] = html; };
+  const cg = cityGifts(now());
+  set('cg', `🎁 <b>${nf.format(cg.done || cg.total)}</b> ${cg.done === cg.total ? 'cadeaux déposés' : cg.done ? `/ ${nf.format(cg.total)} cadeaux déposés` : 'cadeaux à livrer'} ${de(home().name).replace(/^de /, 'à ').replace(/^d'/, 'à ').replace(/^du /, 'au ')}${cg.kids ? ` · dont <b>${cg.kids}</b> ${cg.kids > 1 ? 'pour nos lutins' : 'pour notre lutin'}` : ''}`);
   if (s.mode === 'pole') {
     set('kicker', 'Au Pôle Nord, on se prépare…');
     set('title', 'Le Père Noël attend<br><em>au Pôle Nord</em>');
@@ -316,6 +321,44 @@ function bindMap() {
   document.getElementById('mcity')!.onclick = (e) => { if ((e.target as Element).id === 'unpick') { picked = -1; redraw(); } };
 }
 
+/* ---------- compteur de notre ville ---------- */
+const WORLD = 8_100_000_000;
+/** Cadeaux pour la ville choisie : distribués pendant le quart d'heure avant minuit. */
+function cityGifts(t: number) {
+  const h = home(), total = Math.max(1, Math.round((h.pop * 1e6 * KIDS) / WORLD));
+  const m = state(trip, t, h).homeMidnight, f = Math.min(1, Math.max(0, (t - (m - 15 * 60_000)) / (15 * 60_000)));
+  const kids = settings.names.split(/\s*(?:&|,|\bet\b)\s*/).filter((x) => x.trim()).length;
+  return { total, done: Math.floor(total * f), kids };
+}
+
+/* ---------- veilleuse ---------- */
+let wake: { release(): Promise<void> } | null = null;
+function nightView() {
+  return `<main class="veil" id="veil">
+  <button class="veil-x" id="vx" type="button" aria-label="Quitter la veilleuse">×</button>
+  <svg class="veil-sky" viewBox="0 0 390 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <path class="veil-moon" d="M250 140a52 52 0 1 0 52 66a40 40 0 1 1 -52 -66z" fill="#EBA93A" opacity=".85"/>
+    <g fill="#FFF4E6">${[[40, 80], [110, 40], [170, 120], [330, 60], [360, 300], [60, 260], [140, 330], [300, 400], [40, 470], [210, 250], [350, 520], [90, 590], [250, 560]]
+      .map(([x, y], i) => `<circle class="tw" cx="${x}" cy="${y}" r="${1.2 + (i % 3) * 0.6}" style="animation-delay:${(i * 0.7) % 4}s;animation-duration:${3 + (i % 4)}s"/>`).join('')}</g>
+    <path d="M0 640c80-30 150-30 210-10s120 20 180-5V700H0z" fill="#151a3d"/>
+    <g transform="translate(60 600)"><path d="M0 30L22 12l22 18" fill="#0E1230"/><rect x="5" y="29" width="34" height="22" fill="#0E1230"/><rect class="win" x="10" y="35" width="7" height="7"/></g>
+  </svg>
+  <div class="veil-sl"><svg width="110" height="44" viewBox="0 0 110 44" aria-hidden="true"><use href="#sleigh"/></svg></div>
+  <p class="veil-txt" id="vt"></p></main>`;
+}
+function tickNight() {
+  const s = state(trip, now(), home());
+  const txt = s.mode === 'pole' ? 'Le Père Noël se repose au Pôle Nord.' : s.mode === 'rentre' ? 'Joyeux Noël. Fais de beaux rêves.'
+    : s.mode === 'passe' ? 'Il est passé… Dors bien.' : `Il vole au-dessus ${de(s.here.name)}.<br>Dors vite, il arrive à minuit.`;
+  const e = document.getElementById('vt');
+  if (e && e.innerHTML !== txt) e.innerHTML = txt;
+}
+async function bindNight() {
+  document.getElementById('vx')!.onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); location.hash = '#/'; };
+  try { await document.documentElement.requestFullscreen?.(); } catch { /* refusé : on reste en page */ }
+  try { wake = await (navigator as any).wakeLock?.request('screen'); } catch { /* non supporté */ }
+}
+
 /* ---------- les 9 rennes ---------- */
 function reindeerView() {
   return `<main class="screen">${bar('Les 9 <em>rennes</em>')}
@@ -427,11 +470,14 @@ function scaleStage() {
 }
 function route() {
   if (trip.home !== home().name) trip = buildTrip(trip.year, home());
+  wake?.release().catch(() => {}); wake = null;
+  document.documentElement.classList.toggle('veil-on', location.hash === '#/veilleuse');
   clearInterval(timer); cancelAnimationFrame(raf); lastMode = ''; lastHere = ''; for (const k in shown) delete shown[k];
   const r = location.hash.replace('#/', '');
   scrollTo(0, 0);
   if (r === 'carte') { app.innerHTML = mapView(); Object.assign(view, { k: 1, follow: true }); picked = -1; tickMap(); bindMap(); timer = setInterval(tickMap, demo ? 250 : 2000); }
   else if (r === 'rennes') { app.innerHTML = reindeerView(); tickReindeer(); timer = setInterval(tickReindeer, demo ? 300 : 5000); }
+  else if (r === 'veilleuse') { app.innerHTML = nightView(); tickNight(); bindNight(); timer = setInterval(tickNight, 5000); }
   else if (r === 'lettre') { app.innerHTML = letterView(); bindLetter(); }
   else if (r === 'reglages') { app.innerHTML = settingsView(); bindSettings(); }
   else {
