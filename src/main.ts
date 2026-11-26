@@ -2,6 +2,8 @@ import './style.css';
 import { CITIES, HOME_DEFAULT, type City } from './cities';
 import { buildTrip, state, tripYear, slerp as slerpLL, KIDS, type Trip, type State } from './santa';
 import { LAND } from './land';
+import { REINDEER, mood, reindeerSvg } from './reindeer';
+import { unlock, jingle, carol } from './sound';
 
 /* ---------- temps (réel ou démo) ---------- */
 const q = new URLSearchParams(location.search);
@@ -23,7 +25,7 @@ function now(): number {
 /* ---------- stockage ---------- */
 const load = <T>(k: string, d: T): T => { try { return { ...d, ...JSON.parse(localStorage.getItem(k) || '{}') }; } catch { return d; } };
 const save = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* mode privé */ } };
-const settings = load('traineau.settings', { names: '', city: HOME_DEFAULT.name });
+const settings = load('traineau.settings', { names: '', city: HOME_DEFAULT.name, sound: false, theme: 'auto' });
 const letter = load('traineau.letter', { text: '', wishes: '', sig: '' });
 const home = (): City => CITIES.find((c) => c.name === settings.city) ?? HOME_DEFAULT;
 
@@ -50,6 +52,7 @@ const ICON = {
   map: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14"/></svg>',
   back: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
   gear: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>',
+  bell: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4M12 3v2"/><path class="mute" d="M3 3l18 18"/></svg>',
   print: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M7 14h10v7H7z"/></svg>',
 };
 const sleighSvg = (w = 110, h = 44) =>
@@ -60,12 +63,13 @@ const bar = (title: string) => `<header class="bar up"><a class="round sm" href=
 const LANDS = '<path d="M80 110c25-18 60-10 70 10s-10 35 10 50 20 40-10 45-40-20-55-35-40-50-15-70z"/><path d="M210 90c30-8 60 5 70 25s-15 30 5 45-5 45-35 35-30-30-45-45-25-52 5-60z"/><path d="M150 230c20 0 35 12 28 28s-35 18-40 0 0-28 12-28z"/>';
 function homeView() {
   return `<main class="screen" id="home">
+  <button class="gear sound${settings.sound ? ' on' : ''}" id="snd" type="button" aria-label="Grelots" aria-pressed="${settings.sound}">${ICON.bell}</button>
   <a class="gear" href="#/reglages" aria-label="Réglages">${ICON.gear}</a>
   <header class="hero up"><div class="kicker" id="kicker"></div><h1 id="title"></h1></header>
   <div class="stage" id="stage"><div class="stage-in">
     <svg width="390" height="300" viewBox="0 0 390 300" aria-hidden="true">
       <defs><clipPath id="g"><circle cx="195" cy="160" r="120"/></clipPath></defs>
-      <circle cx="195" cy="160" r="134" fill="#F6CFB4"/>
+      <circle class="halo" cx="195" cy="160" r="134"/>
       <circle cx="195" cy="160" r="120" fill="#2F3F7A"/>
       <g clip-path="url(#g)">
         <g class="land" fill="#FFF4E6">${LANDS}<g transform="translate(360 0)">${LANDS}</g></g>
@@ -75,11 +79,11 @@ function homeView() {
       <path d="M318 30a22 22 0 1 0 22 28a17 17 0 1 1 -22 -28z" fill="#EBA93A" stroke="#3A2630" stroke-width="1.5"/>
       <g fill="#EBA93A" stroke="#3A2630" stroke-width="1"><path class="tw" d="M50 40l3 7 7 1-7 3-3 7-3-7-7-3 7-1z"/><path class="tw" style="animation-delay:1.2s" d="M60 230l2 5 5 1-5 2-2 5-2-5-5-2 5-1z"/><path class="tw" style="animation-delay:.5s" d="M348 250l2 5 5 1-5 2-2 5-2-5-5-2 5-1z"/><path class="tw" style="animation-delay:1.9s" d="M100 18l2 4 4 1-4 2-2 4-2-4-4-2 4-1z"/></g>
     </svg>
-    <div class="sl" id="sl"><div class="bob">${sleighSvg()}</div></div>
+    <div class="sl" id="sl" title="Fais sonner les grelots !"><div class="bob">${sleighSvg()}</div></div>
   </div></div>
   <section class="stats up d2">
     <div><b id="gifts" class="long"></b><span id="giftsL"></span></div><i></i>
-    <div><b>9</b><span>rennes en forme</span></div><i></i>
+    <a class="stat-link" href="#/rennes"><b>9</b><span>rennes en forme ›</span></a><i></i>
     <div><b id="pct"></b><span id="pctL"></span></div>
   </section>
   <section class="card house up d4" id="house">
@@ -99,10 +103,17 @@ function homeView() {
   </nav></main>`;
 }
 
-let lastMode = '';
+let lastMode = '', lastHere = '', lastJingle = 0;
 const shown: Record<string, string> = {};
 function tickHome() {
   const s = state(trip, now(), home()), $ = (id: string) => document.getElementById(id)!;
+  if (settings.sound) {
+    if (lastMode === 'vol' && s.mode === 'passe') carol();
+    else if (lastHere && s.here.name !== lastHere && (s.mode === 'vol' || s.mode === 'passe') && Date.now() - lastJingle > 4000) {
+      jingle(s.here.pop >= 5 ? 8 : 4); lastJingle = Date.now();
+    }
+  }
+  lastHere = s.here.name;
   if (s.mode !== lastMode) {
     lastMode = s.mode;
     $('sl').classList.toggle('rest', s.mode === 'pole' || s.mode === 'rentre');
@@ -202,7 +213,7 @@ function globeSvg(s: State) {
   });
   const h = home(), [hx, hy, hv] = project(h.lat, h.lon, c);
   const [sx, sy, sv] = project(s.pos.lat, s.pos.lon, c);
-  return `<circle r="${GR + 12}" fill="#F6CFB4"/><circle r="${GR}" fill="#2F3F7A"/>
+  return `<circle class="halo" r="${GR + 12}"/><circle r="${GR}" fill="#2F3F7A"/>
   <g clip-path="url(#gc)"><g fill="#FFF4E6" stroke="#3A2630" stroke-width=".6" stroke-linejoin="round">${land}</g>
   <path d="${future}" stroke="#FFF4E6" stroke-width="1.2" stroke-dasharray="2 4" fill="none" opacity=".55"/>
   <path d="${past}" stroke="#EBA93A" stroke-width="2.4" fill="none" stroke-linecap="round"/>${dots}
@@ -236,6 +247,24 @@ function bindDrag() {
   svg.addEventListener('pointerdown', (e) => { x0 = e.clientX; svg.setPointerCapture(e.pointerId); });
   svg.addEventListener('pointermove', (e) => { if (x0 === null) return; drag -= (e.clientX - x0) * 0.5; x0 = e.clientX; tickMap(); });
   svg.addEventListener('pointerup', () => (x0 = null));
+}
+
+/* ---------- les 9 rennes ---------- */
+function reindeerView() {
+  return `<main class="screen">${bar('Les 9 <em>rennes</em>')}
+  <p class="hint up" style="margin:10px 20px 0">Touche un renne pour entendre ses grelots.</p>
+  ${REINDEER.map((r, i) => `<section class="card deer up" style="animation-delay:${0.05 * i}s" data-i="${i}">
+    ${reindeerSvg(r)}<div><div class="big">${r.name} <small>${r.role}</small></div>
+    <p>${r.fact}</p><div class="meter"><i id="en${i}"></i></div><div class="hush" id="mo${i}"></div></div></section>`).join('')}
+  <div style="height:28px"></div></main>`;
+}
+function tickReindeer() {
+  const s = state(trip, now(), home());
+  REINDEER.forEach((r, i) => {
+    const m = mood(r, i, s.progress, s.mode);
+    (document.getElementById('en' + i) as HTMLElement).style.width = m.energy + '%';
+    document.getElementById('mo' + i)!.textContent = `${m.energy} % · ${m.text}`;
+  });
 }
 
 /* ---------- lettre ---------- */
@@ -277,6 +306,8 @@ function settingsView() {
     <label class="field"><span>Prénoms des enfants</span><input name="names" value="${esc(settings.names)}" placeholder="Léa &amp; Tom" autocomplete="off"></label>
     <label class="field"><span>Notre ville</span><select name="city">${opts}</select></label>
     <p class="hint">Le Père Noël passe chez vous à minuit pile, heure locale.</p>
+    <label class="field" style="margin-top:18px"><span>Thème</span><select name="theme">${[['auto', 'Automatique (nuit de 18 h à 7 h)'], ['jour', 'Toujours jour'], ['nuit', 'Toujours nuit']]
+      .map(([v, l]) => `<option value="${v}"${settings.theme === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
   </form>
   <div class="foot"><button class="ghost${demo ? ' demo-on' : ''}" id="demo" type="button" aria-label="Mode démo">❄</button></div></main>`;
 }
@@ -284,7 +315,8 @@ function bindSettings() {
   const f = document.getElementById('sf') as HTMLFormElement;
   f.addEventListener('input', () => {
     const d = new FormData(f);
-    Object.assign(settings, { names: String(d.get('names')), city: String(d.get('city')) });
+    Object.assign(settings, { names: String(d.get('names')), city: String(d.get('city')), theme: String(d.get('theme')) });
+    applyTheme();
     save('traineau.settings', settings);
   });
   document.getElementById('demo')!.onclick = () => {
@@ -295,6 +327,30 @@ function bindSettings() {
   };
 }
 
+/* ---------- thème jour / nuit ---------- */
+function applyTheme() {
+  const h = +new Intl.DateTimeFormat('en-GB', { timeZone: home().tz, hour: 'numeric', hourCycle: 'h23' }).format(now());
+  const night = settings.theme === 'nuit' || (settings.theme === 'auto' && (h >= 18 || h < 7));
+  const v = night ? 'nuit' : 'jour';
+  if (document.documentElement.dataset.theme !== v) {
+    document.documentElement.dataset.theme = v;
+    document.querySelector('meta[name=theme-color]')!.setAttribute('content', night ? '#1C2348' : '#FBE6D2');
+  }
+}
+applyTheme();
+setInterval(applyTheme, demo ? 500 : 30_000);
+
+/* ---------- son ---------- */
+if (settings.sound) addEventListener('pointerdown', unlock, { once: true });
+document.addEventListener('click', (e) => {
+  const t = e.target as Element;
+  if (t.closest('#snd')) {
+    settings.sound = !settings.sound; save('traineau.settings', settings);
+    const b = t.closest('#snd')!; b.classList.toggle('on', settings.sound); b.setAttribute('aria-pressed', String(settings.sound));
+    if (settings.sound) { unlock(); jingle(); }
+  } else if (t.closest('#sl, .deer')) { unlock(); jingle(5); }
+});
+
 /* ---------- routeur ---------- */
 const app = document.getElementById('app')!;
 let timer = 0, raf = 0;
@@ -304,10 +360,11 @@ function scaleStage() {
 }
 function route() {
   if (trip.home !== home().name) trip = buildTrip(trip.year, home());
-  clearInterval(timer); cancelAnimationFrame(raf); lastMode = ''; for (const k in shown) delete shown[k];
+  clearInterval(timer); cancelAnimationFrame(raf); lastMode = ''; lastHere = ''; for (const k in shown) delete shown[k];
   const r = location.hash.replace('#/', '');
   scrollTo(0, 0);
   if (r === 'carte') { app.innerHTML = mapView(); tickMap(); bindDrag(); timer = setInterval(tickMap, demo ? 250 : 2000); }
+  else if (r === 'rennes') { app.innerHTML = reindeerView(); tickReindeer(); timer = setInterval(tickReindeer, demo ? 300 : 5000); }
   else if (r === 'lettre') { app.innerHTML = letterView(); bindLetter(); }
   else if (r === 'reglages') { app.innerHTML = settingsView(); bindSettings(); }
   else {
