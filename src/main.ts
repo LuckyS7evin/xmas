@@ -1,0 +1,332 @@
+import './style.css';
+import { CITIES, HOME_DEFAULT, type City } from './cities';
+import { buildTrip, state, tripYear, slerp as slerpLL, KIDS, type Trip, type State } from './santa';
+import { LAND } from './land';
+
+/* ---------- temps (réel ou démo) ---------- */
+const q = new URLSearchParams(location.search);
+const demo = q.has('demo');
+const t0 = Date.now();
+const shift = q.has('at') ? Date.parse(q.get('at')!) - t0 || 0 : 0; // ?at=2026-12-24T20:00Z (tests)
+let trip: Trip = buildTrip(tripYear(t0 + shift));
+const SPEED = 600; // ~27 h de tournée en 2 min 40
+function now(): number {
+  if (!demo) {
+    const n = Date.now() + shift;
+    if (tripYear(n) !== trip.year) trip = buildTrip(tripYear(n));
+    return n;
+  }
+  const span = trip.end - trip.start + 70 * 60_000;
+  return trip.start - 10 * 60_000 + (((Date.now() - t0) * SPEED) % span);
+}
+
+/* ---------- stockage ---------- */
+const load = <T>(k: string, d: T): T => { try { return { ...d, ...JSON.parse(localStorage.getItem(k) || '{}') }; } catch { return d; } };
+const save = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* mode privé */ } };
+const settings = load('traineau.settings', { names: '', city: HOME_DEFAULT.name });
+const letter = load('traineau.letter', { text: '', wishes: '', sig: '' });
+const home = (): City => CITIES.find((c) => c.name === settings.city) ?? HOME_DEFAULT;
+
+/* ---------- formats ---------- */
+const nf = new Intl.NumberFormat('fr-FR');
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+const hm = (t: number, tz: string) => {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(t).map((x) => [x.type, x.value]));
+  return `${+p.hour} h ${p.minute}`;
+};
+const de = (n: string) =>
+  n === 'Pôle Nord' ? 'du Pôle Nord' : /^Le /.test(n) ? 'du ' + n.slice(3) : /^La /.test(n) ? 'de la ' + n.slice(3) : /^[AEIOUYÉÈÎÔH]/i.test(n) ? "d'" + n : 'de ' + n;
+const big = (n: number) => (n >= 1e9 ? nf.format(+(n / 1e9).toFixed(1)) + ' Md' : n >= 1e6 ? nf.format(Math.round(n / 1e6)) + ' M' : nf.format(Math.round(n)));
+const pad = (n: number) => String(n).padStart(2, '0');
+function countdown(ms: number) {
+  const s = Math.floor(ms / 1000), d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return d > 0 ? `${d} j ${h} h ${pad(m)}` : `${h} h ${pad(m)} min ${pad(s % 60)} s`;
+}
+const houseOf = () => (settings.names.trim() ? `La maison de ${esc(settings.names.trim())}` : `La maison à ${esc(home().name)}`);
+
+/* ---------- icônes ---------- */
+const ICON = {
+  pen: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20l4-1L19 8l-3-3L5 16zM14 7l3 3"/></svg>',
+  map: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14"/></svg>',
+  back: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
+  gear: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>',
+  print: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M7 14h10v7H7z"/></svg>',
+};
+const sleighSvg = (w = 110, h = 44) =>
+  `<svg width="${w}" height="${h}" viewBox="0 0 110 44" aria-hidden="true"><path class="trail" d="M-40 30C-24 26-10 30 2 28" stroke="#EBA93A" stroke-width="2.5" fill="none" stroke-linecap="round"/><use href="#sleigh"/></svg>`;
+const bar = (title: string) => `<header class="bar up"><a class="round sm" href="#/" aria-label="Retour">${ICON.back}</a><h2>${title}</h2></header>`;
+
+/* ---------- écran principal ---------- */
+const LANDS = '<path d="M80 110c25-18 60-10 70 10s-10 35 10 50 20 40-10 45-40-20-55-35-40-50-15-70z"/><path d="M210 90c30-8 60 5 70 25s-15 30 5 45-5 45-35 35-30-30-45-45-25-52 5-60z"/><path d="M150 230c20 0 35 12 28 28s-35 18-40 0 0-28 12-28z"/>';
+function homeView() {
+  return `<main class="screen" id="home">
+  <a class="gear" href="#/reglages" aria-label="Réglages">${ICON.gear}</a>
+  <header class="hero up"><div class="kicker" id="kicker"></div><h1 id="title"></h1></header>
+  <div class="stage" id="stage"><div class="stage-in">
+    <svg width="390" height="300" viewBox="0 0 390 300" aria-hidden="true">
+      <defs><clipPath id="g"><circle cx="195" cy="160" r="120"/></clipPath></defs>
+      <circle cx="195" cy="160" r="134" fill="#F6CFB4"/>
+      <circle cx="195" cy="160" r="120" fill="#2F3F7A"/>
+      <g clip-path="url(#g)">
+        <g class="land" fill="#FFF4E6">${LANDS}<g transform="translate(360 0)">${LANDS}</g></g>
+        <g fill="#EBA93A"><circle class="tw" cx="140" cy="150" r="3"/><circle class="tw" cx="230" cy="130" r="2.5" style="animation-delay:.8s"/><circle class="tw" cx="200" cy="200" r="2.5" style="animation-delay:1.6s"/><circle class="tw" cx="262" cy="176" r="2" style="animation-delay:2.1s"/><circle class="tw" cx="110" cy="190" r="2" style="animation-delay:1.1s"/></g>
+      </g>
+      <circle cx="195" cy="160" r="120" fill="none" stroke="#3A2630" stroke-width="2"/>
+      <path d="M318 30a22 22 0 1 0 22 28a17 17 0 1 1 -22 -28z" fill="#EBA93A" stroke="#3A2630" stroke-width="1.5"/>
+      <g fill="#EBA93A" stroke="#3A2630" stroke-width="1"><path class="tw" d="M50 40l3 7 7 1-7 3-3 7-3-7-7-3 7-1z"/><path class="tw" style="animation-delay:1.2s" d="M60 230l2 5 5 1-5 2-2 5-2-5-5-2 5-1z"/><path class="tw" style="animation-delay:.5s" d="M348 250l2 5 5 1-5 2-2 5-2-5-5-2 5-1z"/><path class="tw" style="animation-delay:1.9s" d="M100 18l2 4 4 1-4 2-2 4-2-4-4-2 4-1z"/></g>
+    </svg>
+    <div class="sl" id="sl"><div class="bob">${sleighSvg()}</div></div>
+  </div></div>
+  <section class="stats up d2">
+    <div><b id="gifts" class="long"></b><span id="giftsL"></span></div><i></i>
+    <div><b>9</b><span>rennes en forme</span></div><i></i>
+    <div><b id="pct"></b><span id="pctL"></span></div>
+  </section>
+  <section class="card house up d4" id="house">
+    <svg width="60" height="64" viewBox="0 0 60 64" aria-hidden="true">
+      <circle class="smoke" cx="42" cy="14" r="4" fill="#E8C3A8"/><circle class="smoke" cx="44" cy="12" r="3" fill="#E8C3A8" style="animation-delay:.8s"/><circle class="smoke" cx="41" cy="13" r="3.5" fill="#E8C3A8" style="animation-delay:1.6s"/>
+      <rect x="38" y="18" width="8" height="14" fill="#C4492A" stroke="#3A2630" stroke-width="1.5"/>
+      <path d="M6 34L30 14l24 20" fill="#3A2630" stroke="#3A2630" stroke-width="2" stroke-linejoin="round"/>
+      <rect x="11" y="33" width="38" height="27" rx="2" fill="#EBA93A" stroke="#3A2630" stroke-width="1.8"/>
+      <rect x="25" y="44" width="10" height="16" fill="#3A2630"/>
+      <rect class="win" x="15" y="39" width="7" height="7" fill="#FFF1C9" stroke="#3A2630" stroke-width="1"/>
+    </svg>
+    <div><div class="muted">${houseOf()}</div><div class="big" id="arrive"></div><div class="hush" id="hush"></div></div>
+  </section>
+  <nav class="actions up d6">
+    <a class="btn" href="#/lettre"><span class="wig">${ICON.pen}</span>Écrire au Père Noël</a>
+    <a class="round" href="#/carte" aria-label="Voir la carte">${ICON.map}</a>
+  </nav></main>`;
+}
+
+let lastMode = '';
+const shown: Record<string, string> = {};
+function tickHome() {
+  const s = state(trip, now(), home()), $ = (id: string) => document.getElementById(id)!;
+  const h = home();
+  if (s.mode !== lastMode) {
+    lastMode = s.mode;
+    $('sl').classList.toggle('rest', s.mode === 'pole' || s.mode === 'rentre');
+    $('house').classList.toggle('passe', s.mode === 'passe' || s.mode === 'rentre');
+  }
+  const set = (id: string, html: string) => { if (shown[id] !== html) $(id).innerHTML = shown[id] = html; };
+  if (s.mode === 'pole') {
+    set('kicker', 'Au Pôle Nord, on se prépare…');
+    set('title', 'Le Père Noël attend<br><em>au Pôle Nord</em>');
+    set('gifts', big(KIDS)); set('giftsL', 'cadeaux emballés');
+    set('pct', 'J-' + Math.ceil(s.countdown / 86_400_000)); set('pctL', 'avant le départ');
+    set('arrive', `Départ dans <em>${countdown(s.countdown)}</em>`);
+    set('hush', 'Les lutins emballent les cadeaux…');
+  } else if (s.mode === 'rentre') {
+    set('kicker', 'Joyeux Noël !');
+    set('title', 'Il est bien rentré<br><em>au Pôle Nord</em>');
+    set('gifts', big(KIDS)); set('giftsL', 'cadeaux déposés');
+    set('pct', '100 %'); set('pctL', 'du voyage');
+    set('arrive', 'Il est <em>passé !</em>'); set('hush', 'Joyeux Noël à toute la famille !');
+  } else {
+    set('kicker', s.mode === 'vol' ? 'Il était une fois, le 24 décembre…' : 'Cette nuit, chez vous…');
+    const w = `au-dessus ${de(s.here.name)}`;
+    set('title', `Le Père Noël vole<br><em style="white-space:nowrap;font-size:${Math.min(34, Math.floor(640 / w.length))}px">${w}</em>`);
+    set('gifts', nf.format(Math.floor(s.gifts))); set('giftsL', 'cadeaux déposés');
+    set('pct', Math.floor(s.progress * 100) + ' %'); set('pctL', 'du voyage');
+    if (s.mode === 'vol') {
+      set('arrive', `Il arrive vers <em>${hm(s.homeArrival, h.tz)}</em>`);
+      set('hush', s.homeArrival - now() < 3_600_000 ? 'Vite, au lit ! Il approche…' : 'Chut… il faut dormir !');
+    } else {
+      set('arrive', 'Il est <em>passé !</em>'); set('hush', 'Les cadeaux sont sous le sapin…');
+    }
+  }
+}
+
+/* ---------- carte (globe orthographique) ---------- */
+const RAD = Math.PI / 180, GR = 150;
+let drag = 0;
+type P = [number, number, number]; // x, y, profondeur (>0 = face visible)
+function proj(lat: number, lon: number, c: { lat: number; lon: number }): P {
+  const l = (lon - c.lon) * RAD, p = lat * RAD, p0 = c.lat * RAD;
+  return [GR * Math.cos(p) * Math.sin(l), -GR * (Math.cos(p0) * Math.sin(p) - Math.sin(p0) * Math.cos(p) * Math.cos(l)),
+    Math.sin(p0) * Math.sin(p) + Math.cos(p0) * Math.cos(p) * Math.cos(l)];
+}
+const project = (lat: number, lon: number, c: { lat: number; lon: number }): [number, number, boolean] => {
+  const [x, y, d] = proj(lat, lon, c);
+  return [x, y, d > 0];
+};
+/** Polygone découpé à l'horizon : les parties cachées suivent le bord du globe. */
+function ringPath(pts: P[]): string {
+  const n = pts.length, s0 = pts.findIndex((p) => p[2] > 0);
+  if (s0 < 0) return '';
+  const out: [number, number][] = [];
+  let exit = 0;
+  for (let i = 0; i < n; i++) {
+    const a = pts[(s0 + i) % n], b = pts[(s0 + i + 1) % n];
+    if (a[2] > 0) out.push([a[0], a[1]]);
+    if (a[2] > 0 !== b[2] > 0) {
+      const t = a[2] / (a[2] - b[2]), x = a[0] + t * (b[0] - a[0]), y = a[1] + t * (b[1] - a[1]);
+      const ang = Math.atan2(y, x);
+      if (a[2] > 0) exit = ang;
+      else {
+        let d = ang - exit;
+        d -= Math.round(d / (2 * Math.PI)) * 2 * Math.PI;
+        for (let k = 1; k < 12; k++) out.push([GR * Math.cos(exit + (d * k) / 12), GR * Math.sin(exit + (d * k) / 12)]);
+      }
+      out.push([GR * Math.cos(ang), GR * Math.sin(ang)]);
+    }
+  }
+  return 'M' + out.map(([x, y]) => f1(x) + ' ' + f1(y)).join('L') + 'Z';
+}
+const f1 = (n: number) => n.toFixed(1);
+function globeSvg(s: State) {
+  const c = { lat: Math.max(-30, Math.min(50, s.pos.lat)) * 0.8, lon: s.pos.lon + drag };
+  let land = '';
+  for (const r of LAND) {
+    const pts: P[] = [];
+    for (let i = 0; i < r.length; i += 2) pts.push(proj(r[i + 1], r[i], c));
+    land += `<path d="${ringPath(pts)}"/>`;
+  }
+  let past = '', future = '';
+  const st = trip.stops;
+  for (let i = 0; i < st.length - 1; i++) {
+    let prev: [number, number, boolean] | null = null;
+    for (let k = 0; k <= 6; k++) {
+      const a = st[i], b = st[i + 1], f = k / 6;
+      const done = i < s.i || (i === s.i && f <= s.f);
+      const v = slerpLL(a, b, f), p = project(v.lat, v.lon, c);
+      if (prev && prev[2] && p[2]) { const seg = `M${f1(prev[0])} ${f1(prev[1])}L${f1(p[0])} ${f1(p[1])}`; if (done) past += seg; else future += seg; }
+      prev = p;
+    }
+  }
+  let dots = '';
+  st.forEach((x, i) => {
+    if (x.name === 'Pôle Nord') return;
+    const [px, py, v] = project(x.lat, x.lon, c);
+    if (v) dots += i <= s.i ? `<circle cx="${f1(px)}" cy="${f1(py)}" r="2.6" fill="#EBA93A"/>` : `<circle cx="${f1(px)}" cy="${f1(py)}" r="1.6" fill="#FFF4E6" opacity=".7"/>`;
+  });
+  const h = home(), [hx, hy, hv] = project(h.lat, h.lon, c);
+  const [sx, sy, sv] = project(s.pos.lat, s.pos.lon, c);
+  return `<circle r="${GR + 12}" fill="#F6CFB4"/><circle r="${GR}" fill="#2F3F7A"/>
+  <g clip-path="url(#gc)"><g fill="#FFF4E6" stroke="#3A2630" stroke-width=".6" stroke-linejoin="round">${land}</g>
+  <path d="${future}" stroke="#FFF4E6" stroke-width="1.2" stroke-dasharray="2 4" fill="none" opacity=".55"/>
+  <path d="${past}" stroke="#EBA93A" stroke-width="2.4" fill="none" stroke-linecap="round"/>${dots}
+  ${hv ? `<g transform="translate(${f1(hx)} ${f1(hy)})"><path d="M-6 0L0-6 6 0V6H-6Z" fill="#C4492A" stroke="#3A2630" stroke-width="1.4" stroke-linejoin="round"/></g>` : ''}
+  ${sv ? `<circle class="tw" cx="${f1(sx)}" cy="${f1(sy)}" r="11" fill="#EBA93A" opacity=".45"/><use href="#sleigh" x="${f1(sx - 30)}" y="${f1(sy - 18)}" width="60" height="24"/>` : ''}</g>
+  <circle r="${GR}" fill="none" stroke="#3A2630" stroke-width="2"/>`;
+}
+
+function mapView() {
+  return `<main class="screen">${bar('Le grand <em>voyage</em>')}
+  <section class="card globe up d2"><svg id="map" viewBox="-165 -165 330 330" role="img" aria-label="Globe avec le trajet du Père Noël"><defs><clipPath id="gc"><circle r="${GR}"/></clipPath></defs><g id="mapg"></g></svg></section>
+  <div class="legend up d2" style="margin-top:14px"><span><i style="background:#EBA93A"></i>visitée</span><span><i style="background:#FFF4E6"></i>à venir</span><span><i style="background:#C4492A;border-radius:2px"></i>chez nous</span></div>
+  <section class="card grid up d4" id="mstats"></section>
+  <section class="card up d6" style="margin-bottom:28px"><div class="big">Dernières <em>étapes</em></div><ul class="stops" id="mstops"></ul></section></main>`;
+}
+function tickMap() {
+  const s = state(trip, now(), home()), tz = home().tz;
+  document.getElementById('mapg')!.innerHTML = globeSvg(s);
+  const visited = trip.stops.slice(1, s.i + 1).filter((x) => x.name !== 'Pôle Nord');
+  document.getElementById('mstats')!.innerHTML =
+    `<div><b>${nf.format(Math.round(s.km))}</b><span>km parcourus</span></div><div><b>${visited.length}/${trip.stops.length - 2}</b><span>villes visitées</span></div>` +
+    `<div><b>${big(s.cookies)}</b><span>biscuits mangés</span></div><div><b>${big(s.milk)}</b><span>verres de lait</span></div>`;
+  const last = visited.slice(-8).reverse();
+  document.getElementById('mstops')!.innerHTML = last.length
+    ? last.map((x) => `<li><span>${esc(x.name)} <small>· ${esc(x.country)}</small></span><small>${hm(x.t, tz)}</small></li>`).join('')
+    : `<li><span>Le traîneau attend au Pôle Nord.</span></li>`;
+}
+function bindDrag() {
+  const svg = document.getElementById('map')!;
+  let x0: number | null = null;
+  svg.addEventListener('pointerdown', (e) => { x0 = e.clientX; svg.setPointerCapture(e.pointerId); });
+  svg.addEventListener('pointermove', (e) => { if (x0 === null) return; drag -= (e.clientX - x0) * 0.5; x0 = e.clientX; tickMap(); });
+  svg.addEventListener('pointerup', () => (x0 = null));
+}
+
+/* ---------- lettre ---------- */
+function letterView() {
+  return `<main class="screen">${bar('Ma lettre au <em>Père Noël</em>')}
+  <form class="card letter up d2" id="lf">
+    <label class="field"><span>Cher Père Noël,</span><textarea name="text" rows="5" placeholder="Cette année, j'ai été très sage…">${esc(letter.text)}</textarea></label>
+    <label class="field"><span>Ma liste de souhaits</span><textarea name="wishes" rows="5" placeholder="Un vélo rouge&#10;Un livre de dragons">${esc(letter.wishes)}</textarea></label>
+    <label class="field"><span>Signé</span><input name="sig" value="${esc(letter.sig)}" placeholder="${esc(settings.names) || 'Ton prénom'}"></label>
+    <p class="hint">Ta lettre est gardée sur ce téléphone.</p>
+  </form>
+  <nav class="actions up d4"><button class="btn" id="print" type="button">${ICON.print}Imprimer ma lettre</button></nav>
+  <article class="printout" id="po"></article></main>`;
+}
+function renderPrintout() {
+  const w = letter.wishes.split('\n').map((x) => x.trim()).filter(Boolean);
+  document.getElementById('po')!.innerHTML = `<header><h1>Cher <em>Père Noël</em>,</h1>${sleighSvg(150, 60)}</header>
+  <p>${esc(letter.text) || '&nbsp;'}</p>${w.length ? `<h3>Ma liste de souhaits</h3><ul>${w.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+  <div class="sig">${esc(letter.sig) || '&nbsp;'}</div>`;
+}
+function bindLetter() {
+  const f = document.getElementById('lf') as HTMLFormElement;
+  f.addEventListener('input', () => {
+    const d = new FormData(f);
+    Object.assign(letter, { text: d.get('text'), wishes: d.get('wishes'), sig: d.get('sig') });
+    save('traineau.letter', letter);
+    renderPrintout();
+  });
+  document.getElementById('print')!.onclick = () => window.print();
+  renderPrintout();
+}
+
+/* ---------- réglages ---------- */
+function settingsView() {
+  const opts = [HOME_DEFAULT, ...[...CITIES].filter((c) => c.pop > 0).sort((a, b) => a.name.localeCompare(b.name, 'fr'))]
+    .map((c) => `<option value="${esc(c.name)}"${c.name === settings.city ? ' selected' : ''}>${esc(c.name)} · ${esc(c.country)}</option>`).join('');
+  return `<main class="screen">${bar('Réglages')}
+  <form class="card up d2" id="sf">
+    <label class="field"><span>Prénoms des enfants</span><input name="names" value="${esc(settings.names)}" placeholder="Léa &amp; Tom" autocomplete="off"></label>
+    <label class="field"><span>Notre ville</span><select name="city">${opts}</select></label>
+    <p class="hint">Le Père Noël passe chez vous un peu avant minuit, heure locale.</p>
+  </form>
+  <div class="foot"><button class="ghost${demo ? ' demo-on' : ''}" id="demo" type="button" aria-label="Mode démo">❄</button></div></main>`;
+}
+function bindSettings() {
+  const f = document.getElementById('sf') as HTMLFormElement;
+  f.addEventListener('input', () => {
+    const d = new FormData(f);
+    Object.assign(settings, { names: String(d.get('names')), city: String(d.get('city')) });
+    save('traineau.settings', settings);
+  });
+  document.getElementById('demo')!.onclick = () => {
+    const u = new URL(location.href);
+    demo ? u.searchParams.delete('demo') : u.searchParams.set('demo', '1');
+    u.hash = '#/';
+    location.href = u.toString();
+  };
+}
+
+/* ---------- routeur ---------- */
+const app = document.getElementById('app')!;
+let timer = 0, raf = 0;
+function scaleStage() {
+  const st = document.getElementById('stage');
+  if (st) st.style.setProperty('--s', String(st.clientWidth / 390));
+}
+function route() {
+  clearInterval(timer); cancelAnimationFrame(raf); lastMode = ''; for (const k in shown) delete shown[k];
+  const r = location.hash.replace('#/', '');
+  scrollTo(0, 0);
+  if (r === 'carte') { app.innerHTML = mapView(); tickMap(); bindDrag(); timer = setInterval(tickMap, demo ? 250 : 2000); }
+  else if (r === 'lettre') { app.innerHTML = letterView(); bindLetter(); }
+  else if (r === 'reglages') { app.innerHTML = settingsView(); bindSettings(); }
+  else {
+    app.innerHTML = homeView(); scaleStage();
+    const loop = () => { tickHome(); raf = requestAnimationFrame(loop); };
+    loop();
+  }
+}
+addEventListener('hashchange', route);
+addEventListener('resize', scaleStage);
+if (demo) document.body.insertAdjacentHTML('beforeend', '<div class="demo-badge">démo</div>');
+route();
+
+/* ---------- PWA : hors ligne ---------- */
+const CACHE = 'traineau-v1';
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  navigator.serviceWorker.register('sw.js');
+  addEventListener('load', () => {
+    const urls = performance.getEntriesByType('resource').map((e) => e.name).filter((u) => u.startsWith(location.origin));
+    caches.open(CACHE).then((c) => c.addAll([...new Set([location.pathname, ...urls])])).catch(() => {});
+  });
+}

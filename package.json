@@ -1,0 +1,24 @@
+{
+  "name": "traineau",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host",
+    "icons": "node scripts/icons.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LuckyS7evin/xmas.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LuckyS7evin/xmas/issues"
+  },
+  "homepage": "https://github.com/LuckyS7evin/xmas#readme",
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21"
+  },
+  "private": true,
+  "type": "module"
+}
