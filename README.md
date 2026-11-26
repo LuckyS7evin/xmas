@@ -7,6 +7,8 @@ Petite PWA familiale pour suivre le Père Noël le 24 décembre. 100 % statique,
 - Réglages (prénoms, ville ; par défaut **Beaucaire**, thème), lettre au Père Noël imprimable, carte du trajet.
 - Grelots (🔔 en haut à gauche, coupés par défaut) : à chaque ville, « Vive le vent » à minuit chez nous ; toucher le traîneau fait sonner les grelots.
 - Fiches des 9 rennes (touche « rennes en forme ») avec leur énergie qui baisse pendant la nuit.
+- Compteur « cadeaux pour notre ville » (≈ 27 % de la population), distribués dans le quart d'heure avant minuit.
+- Veilleuse (🌙) : écran plein, très sombre, lune et traîneau qui passe lentement ; l'écran reste allumé. × pour quitter.
 - Thème nuit automatique de 18 h à 7 h (heure de la ville choisie), ou forcé dans les réglages.
 - **Démo** : `?demo=1` (ou le ❄ discret en bas des réglages) rejoue la tournée en ~3 min.
   Pour tester un instant précis : `?at=2026-12-24T21:00Z`.

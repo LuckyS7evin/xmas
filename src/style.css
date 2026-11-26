@@ -93,6 +93,23 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 a.stat-link{color:inherit;text-decoration:none}
 
+.city-gifts{margin:14px 24px 0;text-align:center;font-size:13px;color:var(--muted)}
+.city-gifts b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* ---------- veilleuse : très sombre, mouvements lents ---------- */
+@keyframes drift{0%{transform:translateX(-140px) translateY(0)}50%{transform:translateX(50vw) translateY(-30px)}100%{transform:translateX(calc(100vw + 40px)) translateY(10px)}}
+@keyframes breathe{0%,100%{opacity:.75}50%{opacity:1}}
+.veil-on body{background:#080B1E}
+.veil-on .snow{opacity:.35}
+.veil-on .demo-badge{opacity:.3}
+.veil{position:fixed;inset:0;background:#080B1E;overflow:hidden;z-index:4;animation:breathe 8s ease-in-out infinite}
+.veil-sky{position:absolute;inset:0;width:100%;height:100%}
+.veil-moon{filter:drop-shadow(0 0 18px rgba(235,169,58,.45)) drop-shadow(0 0 50px rgba(235,169,58,.2))}
+.veil-sky .win{fill:#FFF1C9;opacity:.8}
+.veil-sl{position:absolute;top:32%;left:0;opacity:.55;animation:drift 45s linear infinite}
+.veil-txt{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 18%);text-align:center;font-family:var(--serif);font-style:italic;font-size:20px;line-height:1.4;color:#8F8CB8;margin:0;padding:0 24px}
+.veil-x{position:absolute;top:calc(env(safe-area-inset-top) + 10px);right:12px;background:none;border:0;color:#3D4170;font-size:30px;padding:6px 12px;z-index:5;cursor:pointer}
+
 /* ---------- sous-pages ---------- */
 .deer{display:flex;gap:14px;align-items:flex-start;margin-top:16px;cursor:pointer;padding:14px 16px}
 .deer>svg{flex-shrink:0;background:#FBE6D2;border-radius:50%;border:2px solid var(--ink)}
